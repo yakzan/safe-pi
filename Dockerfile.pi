@@ -1,0 +1,95 @@
+FROM node:22-bookworm
+
+# Install base tooling + prerequisites for zsh/fzf/LazyVim
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    wget \
+    gpg \
+    ca-certificates \
+    bash \
+    zsh \
+    neovim \
+    ripgrep \
+    fd-find \
+    fzf \
+    less \
+    procps \
+    tar \
+    gzip \
+    xz-utils \
+    build-essential \
+ && rm -rf /var/lib/apt/lists/*
+
+# Ensure both `fd` and Debian's `fdfind` command names are available.
+RUN set -eux; \
+    if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then \
+      ln -sf "$(command -v fdfind)" /usr/local/bin/fd; \
+    fi
+
+# Install lazygit with apt when available; otherwise use upstream release assets.
+RUN set -eux; \
+    apt-get update; \
+    if apt-cache show lazygit >/dev/null 2>&1; then \
+      apt-get install -y lazygit; \
+    else \
+      arch="$(dpkg --print-architecture)"; \
+      case "${arch}" in \
+        amd64) lg_arch="Linux_x86_64" ;; \
+        arm64) lg_arch="Linux_arm64" ;; \
+        armhf) lg_arch="Linux_armv6" ;; \
+        *) echo "Unsupported architecture for lazygit: ${arch}" >&2; exit 1 ;; \
+      esac; \
+      lg_version="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p' | head -n1)"; \
+      curl -fsSL -o /tmp/lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${lg_version}/lazygit_${lg_version}_${lg_arch}.tar.gz"; \
+      tar -xf /tmp/lazygit.tar.gz -C /tmp lazygit; \
+      install -m 0755 /tmp/lazygit /usr/local/bin/lazygit; \
+      rm -f /tmp/lazygit /tmp/lazygit.tar.gz; \
+    fi; \
+    rm -rf /var/lib/apt/lists/*
+
+# Install eza with apt when available; otherwise use upstream release assets.
+RUN set -eux; \
+    apt-get update; \
+    if apt-cache show eza >/dev/null 2>&1; then \
+      apt-get install -y eza; \
+    else \
+      arch="$(dpkg --print-architecture)"; \
+      case "${arch}" in \
+        amd64) eza_arch="x86_64-unknown-linux-gnu" ;; \
+        arm64) eza_arch="aarch64-unknown-linux-gnu" ;; \
+        armhf) eza_arch="arm-unknown-linux-gnueabihf" ;; \
+        *) echo "Unsupported architecture for eza: ${arch}" >&2; exit 1 ;; \
+      esac; \
+      eza_url="$(curl -fsSL https://api.github.com/repos/eza-community/eza/releases/latest | grep -Eo "https://[^\"]*${eza_arch}\.tar\.gz" | head -n1)"; \
+      [ -n "${eza_url}" ]; \
+      curl -fsSL -o /tmp/eza.tar.gz "${eza_url}"; \
+      tar -xf /tmp/eza.tar.gz -C /tmp; \
+      install -m 0755 /tmp/eza /usr/local/bin/eza; \
+      rm -f /tmp/eza /tmp/eza.tar.gz; \
+    fi; \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Oh My Zsh in unattended mode for non-interactive Docker builds.
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+
+# Install LazyVim starter config when Neovim version is compatible.
+RUN set -eux; \
+    nvim_version="$(nvim --version | sed -n '1s/^NVIM v//p' | cut -d- -f1)"; \
+    if dpkg --compare-versions "${nvim_version}" ge "0.11.2"; then \
+      rm -rf /root/.config/nvim; \
+      git clone https://github.com/LazyVim/starter /root/.config/nvim; \
+      rm -rf /root/.config/nvim/.git; \
+    else \
+      echo "Skipping LazyVim bootstrap: requires Neovim >= 0.11.2, found ${nvim_version}"; \
+    fi
+
+# Install uv from Astral's official container image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+# Install Pi coding agent globally
+RUN npm install -g @mariozechner/pi-coding-agent@latest
+
+WORKDIR /workspace
+
+CMD ["bash"]
