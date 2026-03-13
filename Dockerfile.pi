@@ -1,5 +1,8 @@
 FROM node:22-bookworm
 
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
 # Install base tooling + prerequisites for zsh/fzf/LazyVim
 RUN apt-get update && apt-get install -y \
     git \
@@ -9,10 +12,18 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     bash \
     zsh \
-    neovim \
     ripgrep \
     fd-find \
     fzf \
+    jq \
+    tree \
+    unzip \
+    zip \
+    tmux \
+    htop \
+    python3 \
+    python3-pip \
+    openssh-client \
     less \
     procps \
     tar \
@@ -20,6 +31,22 @@ RUN apt-get update && apt-get install -y \
     xz-utils \
     build-essential \
  && rm -rf /var/lib/apt/lists/*
+
+# Install Neovim from official releases so LazyVim version requirements are met.
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "${arch}" in \
+      amd64) nvim_arch="x86_64" ;; \
+      arm64) nvim_arch="arm64" ;; \
+      *) echo "Unsupported architecture for Neovim prebuilt binaries: ${arch}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/nvim.tar.gz "https://github.com/neovim/neovim/releases/download/stable/nvim-linux-${nvim_arch}.tar.gz"; \
+    nvim_dir="$(tar -tzf /tmp/nvim.tar.gz | head -n1 | cut -d/ -f1)"; \
+    tar -xzf /tmp/nvim.tar.gz -C /opt; \
+    ln -sf "/opt/${nvim_dir}/bin/nvim" /usr/local/bin/nvim; \
+    rm -f /tmp/nvim.tar.gz; \
+    nvim_version="$(nvim --version | sed -n '1s/^NVIM v//p' | cut -d- -f1)"; \
+    dpkg --compare-versions "${nvim_version}" ge "0.11.2"
 
 # Ensure both `fd` and Debian's `fdfind` command names are available.
 RUN set -eux; \
@@ -73,16 +100,41 @@ RUN set -eux; \
 # Install Oh My Zsh in unattended mode for non-interactive Docker builds.
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 
-# Install LazyVim starter config when Neovim version is compatible.
+# Install additional Oh My Zsh plugins that are not bundled by default.
 RUN set -eux; \
-    nvim_version="$(nvim --version | sed -n '1s/^NVIM v//p' | cut -d- -f1)"; \
-    if dpkg --compare-versions "${nvim_version}" ge "0.11.2"; then \
-      rm -rf /root/.config/nvim; \
-      git clone https://github.com/LazyVim/starter /root/.config/nvim; \
-      rm -rf /root/.config/nvim/.git; \
-    else \
-      echo "Skipping LazyVim bootstrap: requires Neovim >= 0.11.2, found ${nvim_version}"; \
-    fi
+    ZSH_CUSTOM="${ZSH_CUSTOM:-/root/.oh-my-zsh/custom}"; \
+    git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions "${ZSH_CUSTOM}/plugins/zsh-autosuggestions"; \
+    git clone --depth=1 https://github.com/Aloxaf/fzf-tab "${ZSH_CUSTOM}/plugins/fzf-tab"; \
+    git clone --depth=1 https://github.com/unixorn/warhol.plugin.zsh "${ZSH_CUSTOM}/plugins/warhol"; \
+    git clone --depth=1 https://github.com/jocelynmallon/zshmarks "${ZSH_CUSTOM}/plugins/zshmarks"
+
+# Configure Oh My Zsh defaults: theme, plugins, and useful aliases.
+RUN set -eux; \
+    sed -i 's|^ZSH_THEME=.*|ZSH_THEME="agnoster"|' /root/.zshrc; \
+    sed -i 's|^plugins=.*|plugins=(fzf-tab git zsh-autosuggestions warhol zshmarks fzf)|' /root/.zshrc; \
+    cat <<'EOF' >> /root/.zshrc
+
+# Custom aliases
+alias la='ls -la'
+
+# Prefer eza when available
+if command -v eza >/dev/null 2>&1; then
+  alias ls='eza --group-directories-first --icons=auto'
+  alias ll='eza -la --group-directories-first --git'
+  alias lt='eza --tree --level=2 --group-directories-first'
+  alias l='eza -1 --group-directories-first'
+fi
+EOF
+
+# Install LazyVim starter config.
+RUN set -eux; \
+    rm -rf /root/.config/nvim; \
+    git clone https://github.com/LazyVim/starter /root/.config/nvim; \
+    rm -rf /root/.config/nvim/.git
+
+# Pre-install LazyVim plugins so first launch is ready to use.
+RUN set -eux; \
+    nvim --headless "+Lazy! sync" "+qa"
 
 # Install uv from Astral's official container image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -92,4 +144,4 @@ RUN npm install -g @mariozechner/pi-coding-agent@latest
 
 WORKDIR /workspace
 
-CMD ["bash"]
+CMD ["zsh"]
