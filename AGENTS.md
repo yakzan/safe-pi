@@ -18,6 +18,9 @@ This repository contains a single source of truth for the image: `Dockerfile.pi`
 ## Required Behaviors
 
 - If changing Neovim setup, keep compatibility with LazyVim (`>= 0.11.2`).
+- Keep Neovim clipboard defaults configured in LazyVim options:
+  - `vim.opt.clipboard = "unnamedplus"`
+  - `vim.g.clipboard = "osc52"`
 - If changing Oh My Zsh plugins, ensure non-bundled plugins are explicitly installed under:
   - `/root/.oh-my-zsh/custom/plugins/<name>`
 - Keep UTF-8 locale environment variables present:
@@ -34,6 +37,7 @@ After edits, confirm:
 3. Lazy plugin pre-sync exists (`nvim --headless "+Lazy! sync" "+qa"`).
 4. `.zshrc` theme/plugins/aliases are configured.
 5. Added tools are available from supported architectures.
+6. Neovim clipboard defaults and added CLIs are present (`bat`, `termshot`).
 
 ## Preferred Commands
 
@@ -47,5 +51,7 @@ Inside container:
 ```bash
 nvim --version
 nvim --headless "+Lazy! sync" "+qa"
+bat --version
+termshot --help | head -n 1
 zsh -i -c 'echo $ZSH_THEME; alias la'
 ```
