@@ -32,6 +32,23 @@ RUN apt-get update && apt-get install -y \
     build-essential \
  && rm -rf /var/lib/apt/lists/*
 
+# Install Go from official releases so modules requiring modern go.mod versions build cleanly.
+ARG GO_VERSION=1.24.0
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "${arch}" in \
+      amd64) go_arch="amd64" ;; \
+      arm64) go_arch="arm64" ;; \
+      *) echo "Unsupported architecture for Go prebuilt binaries: ${arch}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/go.tgz "https://go.dev/dl/go${GO_VERSION}.linux-${go_arch}.tar.gz"; \
+    rm -rf /usr/local/go; \
+    tar -C /usr/local -xzf /tmp/go.tgz; \
+    ln -sf /usr/local/go/bin/go /usr/local/bin/go; \
+    ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt; \
+    rm -f /tmp/go.tgz; \
+    go version
+
 # Install Neovim from official releases so LazyVim version requirements are met.
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
@@ -97,6 +114,23 @@ RUN set -eux; \
     fi; \
     rm -rf /var/lib/apt/lists/*
 
+# Install bat and normalize command name to `bat` on Debian/Ubuntu.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y bat; \
+    if ! command -v bat >/dev/null 2>&1 && command -v batcat >/dev/null 2>&1; then \
+      ln -sf "$(command -v batcat)" /usr/local/bin/bat; \
+    fi; \
+    rm -rf /var/lib/apt/lists/*
+
+# Install termshot from source so target architecture is handled automatically.
+RUN set -eux; \
+    export GOPATH=/tmp/go; \
+    export GOBIN=/usr/local/bin; \
+    go install github.com/homeport/termshot/cmd/termshot@latest; \
+    termshot --help >/dev/null; \
+    rm -rf "${GOPATH}"
+
 # Install Oh My Zsh in unattended mode for non-interactive Docker builds.
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 
@@ -130,7 +164,13 @@ EOF
 RUN set -eux; \
     rm -rf /root/.config/nvim; \
     git clone https://github.com/LazyVim/starter /root/.config/nvim; \
-    rm -rf /root/.config/nvim/.git
+    rm -rf /root/.config/nvim/.git; \
+    cat <<'EOF' >> /root/.config/nvim/lua/config/options.lua
+
+-- System clipboard integration for remote-friendly copy/paste.
+vim.opt.clipboard = "unnamedplus"
+vim.g.clipboard = "osc52"
+EOF
 
 # Pre-install LazyVim plugins so first launch is ready to use.
 RUN set -eux; \
