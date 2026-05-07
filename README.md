@@ -18,7 +18,7 @@ Docker image definition for a coding-friendly development environment based on `
   - `bat`, `termshot`
   - `python3`, `pip`, `openssh-client`, build toolchain
 - `uv` and `uvx` from Astral image
-- `@mariozechner/pi-coding-agent` (global npm install)
+- `@earendil-works/pi-coding-agent` (global npm install)
 
 ## Build
 

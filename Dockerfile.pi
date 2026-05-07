@@ -180,7 +180,7 @@ RUN set -eux; \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 # Install Pi coding agent globally
-RUN npm install -g @mariozechner/pi-coding-agent@latest
+RUN npm install -g @earendil-works/pi-coding-agent@latest
 
 WORKDIR /workspace
 
