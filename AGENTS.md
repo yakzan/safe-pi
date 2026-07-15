@@ -27,6 +27,7 @@ This repository contains a single source of truth for the image: `Dockerfile.pi`
   - `LANG=C.UTF-8`
   - `LC_ALL=C.UTF-8`
 - Keep final container command as `CMD ["zsh"]` unless explicitly requested otherwise.
+- Keep the Pi package version explicit and ensure the Node base satisfies Pi's declared engine requirement.
 
 ## Validation Checklist
 
@@ -38,6 +39,7 @@ After edits, confirm:
 4. `.zshrc` theme/plugins/aliases are configured.
 5. Added tools are available from supported architectures.
 6. Neovim clipboard defaults and added CLIs are present (`bat`, `termshot`).
+7. The Node runtime satisfies Pi's engine requirement and `pi --version` matches the configured release.
 
 ## Preferred Commands
 
@@ -49,6 +51,9 @@ docker run --rm -it safe-pi:latest
 Inside container:
 
 ```bash
+node --version
+pi --version
+pi --help
 nvim --version
 nvim --headless "+Lazy! sync" "+qa"
 bat --version
